@@ -1,0 +1,79 @@
+# ============================================================
+# StudentsRegister — PRE-PROD via Docker Compose (manual, no CI/CD)
+# ------------------------------------------------------------
+# Same app images as Kubernetes prod, orchestrated by Compose so you
+# can compare Compose vs Kubernetes side by side:
+#   - k8s prod : Helm chart -> MySQL StatefulSet + Deployments + Services + Ingress
+#   - preprod  : the SAME images, wired by Compose services below
+#
+# Self-contained: brings its own MySQL. The mysql:8.0 image auto-creates
+# student_user (grants on student_db) on a fresh volume; Spring then
+# creates the tables (ddl-auto=update) and seeds admin (DataSeeder).
+#
+#   docker compose up -d            # start
+#   docker compose ps               # status
+#   docker compose down             # stop (keep data)
+#   docker compose down -v          # wipe DB volume -> self-heals on next up
+#
+# Pin a different image version:
+#   SR_TAG=v2.0.0 docker compose up -d
+# ============================================================
+services:
+
+  mysql:
+    image: mysql:8.0
+    container_name: sr-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD:?set it}"
+      MYSQL_DATABASE: student_db
+      MYSQL_USER: student_user       # image auto-creates this user on a fresh volume
+      MYSQL_PASSWORD: "${MYSQL_PASSWORD:?set it}"
+    volumes:
+      - sr-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\""]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+    networks: [studentregister]
+
+  studentsregister-backend:
+    image: brana90/brabi:studentsregister-backend-${SR_TAG:-v2.0.0}
+    container_name: studentsregister-backend
+    restart: unless-stopped
+    environment:
+      MYSQL_HOST: mysql              # <-- the compose service name
+      MYSQL_PORT: "3306"
+      MYSQL_DATABASE: student_db
+      MYSQL_USER: student_user
+      MYSQL_PASSWORD: "${MYSQL_PASSWORD:?set it}"
+      # lab / classroom: the app opens without a sign-in page (as admin);
+      # OPEN_ACCESS=false brings the login back
+      OPEN_ACCESS: "${OPEN_ACCESS:-true}"
+    depends_on:
+      mysql:
+        condition: service_healthy   # wait for MySQL before Spring boots (Hibernate needs it)
+    ports:
+      - "8090:8080"
+    networks: [studentregister]
+
+  studentsregister-frontend:
+    image: brana90/brabi:studentsregister-frontend-${SR_TAG:-v2.0.0}
+    container_name: studentsregister-frontend
+    restart: unless-stopped
+    environment:
+      BACKEND_HOST: studentsregister-backend   # nginx proxies /api/ here
+      BACKEND_PORT: "8080"
+    depends_on:
+      - studentsregister-backend
+    ports:
+      - "5174:80"
+    networks: [studentregister]
+
+volumes:
+  sr-mysql-data:
+
+networks:
+  studentregister:
+    driver: bridge

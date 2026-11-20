@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools==75.6.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "srtool"
+version = "0.1.0"
+description = "The platform team's tool for StudentsRegister: status, releases, deploy"
+requires-python = ">=3.12"
+dependencies = ["PyYAML==6.0.2"]
+
+[project.scripts]
+srtool = "srtool.cli:main"
