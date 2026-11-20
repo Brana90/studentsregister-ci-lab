@@ -1,4 +1,4 @@
-# CI for StudentsRegister on GitHub Actions: test, then build and scan the image
+# CI for StudentsRegister on GitHub Actions: test, build and scan the image, then publish it after an approval
 name: ci
 on: [push, pull_request]
 permissions:
@@ -23,9 +23,42 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Build the image
-        run: docker build -t studentsregister:${{ github.sha }} .
+        run: |
+          for try in 1 2 3 4 5; do
+            docker build -t studentsregister:${{ github.sha }} . && break
+            echo "build failed (try $try), retrying in 30 s"; sleep 30
+          done
       - name: Scan the image
         run: >-
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock:ro $TRIVY image
           --scanners vuln --pkg-types os --ignore-unfixed --exit-code 1
           --severity CRITICAL studentsregister:${{ github.sha }}
+  publish:
+    needs: image
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    environment: production
+    permissions:
+      contents: read
+      packages: write
+    env:
+      LAB_NOTIFY_TOKEN: ${{ secrets.LAB_NOTIFY_TOKN }}
+      IMAGE: ghcr.io/brana90/studentsregister-ci-lab:${{ github.sha }}
+    steps:
+      - name: Check the notify secret
+        run: |
+          echo "notify token length: ${#LAB_NOTIFY_TOKEN}"
+          test "${#LAB_NOTIFY_TOKEN}" -gt 0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push the image
+        run: |
+          for try in 1 2 3 4 5; do
+            docker build -t "$IMAGE" . && break
+            echo "build failed (try $try), retrying in 30 s"; sleep 30
+          done
+          docker push "$IMAGE"
