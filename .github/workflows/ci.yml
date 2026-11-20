@@ -42,7 +42,7 @@ jobs:
       contents: read
       packages: write
     env:
-      LAB_NOTIFY_TOKEN: ${{ secrets.LAB_NOTIFY_TOKN }}
+      LAB_NOTIFY_TOKEN: ${{ secrets.LAB_NOTIFY_TOKEN }}
       IMAGE: ghcr.io/brana90/studentsregister-ci-lab:${{ github.sha }}
     steps:
       - name: Check the notify secret
