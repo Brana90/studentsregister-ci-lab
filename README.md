@@ -80,3 +80,5 @@ everything it needs:
 `pom.xml` gained app dependencies (security, jjwt, validation) which the existing
 Docker build installs automatically; the frontend has **no new npm dependencies**
 so `npm ci` keeps working with the existing lockfile.
+
+CI for this lab copy runs on GitHub Actions: .github/workflows/ci.yml, on every push and pull request.
